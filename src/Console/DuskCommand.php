@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 use NunoMaduro\Collision\Adapters\Phpunit\Subscribers\EnsurePrinterIsRegisteredSubscriber;
 use PHPUnit\Runner\Version;
 use Symfony\Component\Finder\Finder;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Exception\ProcessSignaledException;
 use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\Process;
@@ -81,12 +82,17 @@ class DuskCommand extends Command
             }
 
             try {
-                return $process->run(function ($type, $line) {
+                return $process->mustRun(function ($type, $line) {
                     $this->output->write($line);
-                });
-            } catch (ProcessSignaledException $e) {
-                if (extension_loaded('pcntl') && $e->getSignal() !== SIGINT) {
+                })->getExitCode();
+            } catch (ProcessFailedException | ProcessSignaledException $e) {
+                if (get_class($e) == ProcessSignaledException && extension_loaded('pcntl') && $e->getSignal() !== SIGINT) {
                     throw $e;
+                }
+                else {
+                    $errMsg = "Unknown PHPUnit error.";
+                    $testMsg = "There's probably something wrong with your tests.";
+                    echo "\033[00;37m\033[041m{$errMsg}\033[0m \033[00;37m{$testMsg}\033[0m\n", $e->getMessage(), "\n";
                 }
             }
         });
